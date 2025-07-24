@@ -110,7 +110,7 @@ try {
     }
     
     # Parse the UUID from the output
-    # Expected format: "Created tunnel <name> with id <uuid>"
+    # Expected format: "Created tunnel [name] with id [uuid]"
     $uuidMatch = $createOutput | Select-String "Created tunnel .+ with id ([a-f0-9-]+)"
     if ($uuidMatch) {
         $uuid = $uuidMatch.Matches[0].Groups[1].Value
