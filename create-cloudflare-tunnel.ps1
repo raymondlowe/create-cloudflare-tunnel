@@ -31,7 +31,7 @@
     - Requires Administrator privileges
     - Requires active Cloudflare account
     - Domain must be managed by Cloudflare
-    - After running, update the $uuid variable with the generated tunnel UUID
+    - The tunnel UUID is automatically captured during creation
 
 .LINK
     https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
@@ -53,7 +53,7 @@ param(
 $cfExe    = "$env:ProgramFiles\cloudflared\cloudflared.exe"
 $cfDir    = "$env:USERPROFILE\.cloudflared"
 $tunnel   = $TunnelName
-$uuid     = "<TUNNEL-UUID>"  # TODO: Update this with the actual UUID after tunnel creation
+$uuid     = $null  # Will be captured during tunnel creation
 
 Write-Host "=== Cloudflare Tunnel Setup Script ===" -ForegroundColor Cyan
 Write-Host "Tunnel Name: $tunnel" -ForegroundColor Green
@@ -103,12 +103,31 @@ catch {
 # Step 3: Create tunnel
 Write-Host "`nStep 3: Creating tunnel '$tunnel'..." -ForegroundColor Yellow
 try {
-    & $cfExe tunnel create $tunnel
+    # Capture the output to parse the UUID
+    $createOutput = & $cfExe tunnel create $tunnel 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Tunnel creation failed with exit code $LASTEXITCODE"
+        throw "Tunnel creation failed with exit code $LASTEXITCODE. Output: $createOutput"
     }
-    Write-Host "✓ Tunnel '$tunnel' created successfully" -ForegroundColor Green
-    Write-Host "⚠️  IMPORTANT: Copy the tunnel UUID from above and update the `$uuid variable in this script!" -ForegroundColor Red
+    
+    # Parse the UUID from the output
+    # Expected format: "Created tunnel <name> with id <uuid>"
+    $uuidMatch = $createOutput | Select-String "Created tunnel .+ with id ([a-f0-9-]+)"
+    if ($uuidMatch) {
+        $uuid = $uuidMatch.Matches[0].Groups[1].Value
+        Write-Host "✓ Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
+    } else {
+        # Fallback: try to find any UUID pattern in the output
+        $uuidPattern = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
+        $uuidMatch = $createOutput | Select-String $uuidPattern
+        if ($uuidMatch) {
+            $uuid = $uuidMatch.Matches[0].Value
+            Write-Host "✓ Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
+        } else {
+            Write-Warning "Could not automatically extract tunnel UUID from output. Please check the tunnel creation manually."
+            Write-Host "Command output: $createOutput" -ForegroundColor Gray
+            throw "Failed to extract tunnel UUID"
+        }
+    }
 }
 catch {
     Write-Error "Tunnel creation failed: $_"
@@ -118,9 +137,10 @@ catch {
 # Step 4: Generate config.yml
 Write-Host "`nStep 4: Generating configuration file..." -ForegroundColor Yellow
 
-# Validate UUID before proceeding
-if ($uuid -eq "<TUNNEL-UUID>") {
-    Write-Warning "UUID placeholder detected. You'll need to update the script with the actual tunnel UUID before the service will work properly."
+# Validate UUID was captured
+if (-not $uuid) {
+    Write-Error "Tunnel UUID was not captured properly. Cannot continue with configuration."
+    exit 1
 }
 
 # Create .cloudflared directory if it doesn't exist
@@ -197,11 +217,11 @@ catch {
 
 Write-Host "`n=== Setup Complete ===" -ForegroundColor Cyan
 Write-Host "Your tunnel should now be accessible at: https://$Hostname" -ForegroundColor Green
+Write-Host "Tunnel UUID: $uuid" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "1. If you see UUID placeholder warnings above, update the `$uuid variable in this script" -ForegroundColor White
-Write-Host "2. Verify your local service is running on $LocalService" -ForegroundColor White
-Write-Host "3. Test the tunnel by visiting https://$Hostname" -ForegroundColor White
+Write-Host "1. Verify your local service is running on $LocalService" -ForegroundColor White
+Write-Host "2. Test the tunnel by visiting https://$Hostname" -ForegroundColor White
 Write-Host ""
 Write-Host "To manage the service:" -ForegroundColor Yellow
 Write-Host "  Start:   Start-Service cloudflared" -ForegroundColor White
