@@ -129,6 +129,27 @@ Stop-Service cloudflared
 cloudflared service uninstall
 ```
 
+
+After deleting the test tunnels using `cloudflared tunnel delete mytunnel`, here’s what you should check or do on the Cloudflare dashboard:
+
+1. **DNS Records:**  
+   - The script creates a CNAME DNS record (e.g., `mcp.wlmedia.com`) pointing to the tunnel.
+   - Deleting the tunnel with `cloudflared` does **not** automatically remove the DNS record.
+   - **Action:** Go to the DNS section of your domain in the Cloudflare dashboard and manually delete any CNAME records that pointed to the deleted tunnel(s).
+
+2. **Zero Trust/Tunnels Section:**  
+   - The tunnel entry should be gone after deletion, but you can verify in the Cloudflare Zero Trust dashboard under Access → Tunnels (or Network → Tunnels).
+   - If you see any stale or “inactive” tunnels, you can remove them for clarity.
+
+3. **Access Policies (if used):**  
+   - If you set up any Access policies (Cloudflare Access) for the tunnel hostname, review and remove them if they’re no longer needed.
+
+**Summary:**  
+- The only manual step usually required is deleting the DNS record(s) for the tunnel hostname(s) in the Cloudflare dashboard.
+- No further action is needed unless you set up additional Cloudflare features (like Access policies) for the tunnel.
+
+You’re safe to reuse the hostname or tunnel name after cleaning up the DNS!
+
 ## Security Considerations
 
 - The script downloads executables from the internet - ensure you trust the source
