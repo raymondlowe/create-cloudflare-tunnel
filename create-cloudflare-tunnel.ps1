@@ -1,35 +1,209 @@
-# Variables
+<#
+.SYNOPSIS
+    Creates and configures a Cloudflare tunnel on Windows
+
+.DESCRIPTION
+    This script automates the complete setup of a Cloudflare tunnel, including:
+    - Downloading cloudflared.exe
+    - Authentication with Cloudflare
+    - Tunnel creation and configuration
+    - DNS record setup
+    - Windows service installation
+
+.PARAMETER TunnelName
+    The name for the tunnel to create (default: "mytunnel")
+
+.PARAMETER Hostname
+    The public hostname for the tunnel (default: "mcp.wlmedia.com")
+
+.PARAMETER LocalService
+    The local service URL to expose (default: "http://localhost:8080")
+
+.EXAMPLE
+    .\create-cloudflare-tunnel.ps1
+    Creates a tunnel with default settings
+
+.EXAMPLE
+    .\create-cloudflare-tunnel.ps1 -TunnelName "webserver" -Hostname "app.example.com" -LocalService "http://localhost:3000"
+    Creates a tunnel with custom settings
+
+.NOTES
+    - Requires Administrator privileges
+    - Requires active Cloudflare account
+    - Domain must be managed by Cloudflare
+    - After running, update the $uuid variable with the generated tunnel UUID
+
+.LINK
+    https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
+#>
+
+[CmdletBinding()]
+param(
+    [Parameter(HelpMessage="Name for the tunnel")]
+    [string]$TunnelName = "mytunnel",
+    
+    [Parameter(HelpMessage="Public hostname for the tunnel")]
+    [string]$Hostname = "mcp.wlmedia.com",
+    
+    [Parameter(HelpMessage="Local service URL to expose")]
+    [string]$LocalService = "http://localhost:8080"
+)
+
+# Configuration Variables
 $cfExe    = "$env:ProgramFiles\cloudflared\cloudflared.exe"
 $cfDir    = "$env:USERPROFILE\.cloudflared"
-$tunnel   = "mytunnel"
-$uuid     = "<TUNNEL-UUID>"
+$tunnel   = $TunnelName
+$uuid     = "<TUNNEL-UUID>"  # TODO: Update this with the actual UUID after tunnel creation
 
-# 1. Download cloudflared
+Write-Host "=== Cloudflare Tunnel Setup Script ===" -ForegroundColor Cyan
+Write-Host "Tunnel Name: $tunnel" -ForegroundColor Green
+Write-Host "Hostname: $Hostname" -ForegroundColor Green
+Write-Host "Local Service: $LocalService" -ForegroundColor Green
+Write-Host ""
+
+# Step 1: Download cloudflared
+Write-Host "Step 1: Checking for cloudflared..." -ForegroundColor Yellow
 if (-Not (Test-Path $cfExe)) {
-    Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $cfExe
+    Write-Host "Downloading cloudflared.exe..." -ForegroundColor Yellow
+    
+    # Create directory if it doesn't exist
+    $cfParentDir = Split-Path $cfExe -Parent
+    if (-Not (Test-Path $cfParentDir)) {
+        New-Item -ItemType Directory -Path $cfParentDir -Force | Out-Null
+    }
+    
+    try {
+        $downloadUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $cfExe -UseBasicParsing
+        Write-Host "✓ cloudflared.exe downloaded successfully" -ForegroundColor Green
+    }
+    catch {
+        Write-Error "Failed to download cloudflared.exe: $_"
+        exit 1
+    }
+} else {
+    Write-Host "✓ cloudflared.exe already exists" -ForegroundColor Green
 }
 
-# 2. Authenticate (run interactively)
-& $cfExe login
+# Step 2: Authenticate with Cloudflare
+Write-Host "`nStep 2: Authenticating with Cloudflare..." -ForegroundColor Yellow
+Write-Host "This will open your browser for authentication." -ForegroundColor Cyan
+try {
+    & $cfExe login
+    if ($LASTEXITCODE -ne 0) {
+        throw "Authentication failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "✓ Authentication completed" -ForegroundColor Green
+}
+catch {
+    Write-Error "Authentication failed: $_"
+    exit 1
+}
 
-# 3. Create tunnel (run interactively)
-& $cfExe tunnel create $tunnel
+# Step 3: Create tunnel
+Write-Host "`nStep 3: Creating tunnel '$tunnel'..." -ForegroundColor Yellow
+try {
+    & $cfExe tunnel create $tunnel
+    if ($LASTEXITCODE -ne 0) {
+        throw "Tunnel creation failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "✓ Tunnel '$tunnel' created successfully" -ForegroundColor Green
+    Write-Host "⚠️  IMPORTANT: Copy the tunnel UUID from above and update the `$uuid variable in this script!" -ForegroundColor Red
+}
+catch {
+    Write-Error "Tunnel creation failed: $_"
+    exit 1
+}
 
-# 4. Generate config.yml (update $uuid)
-$configYml = @"
+# Step 4: Generate config.yml
+Write-Host "`nStep 4: Generating configuration file..." -ForegroundColor Yellow
+
+# Validate UUID before proceeding
+if ($uuid -eq "<TUNNEL-UUID>") {
+    Write-Warning "UUID placeholder detected. You'll need to update the script with the actual tunnel UUID before the service will work properly."
+}
+
+# Create .cloudflared directory if it doesn't exist
+if (-Not (Test-Path $cfDir)) {
+    New-Item -ItemType Directory -Path $cfDir -Force | Out-Null
+}
+
+try {
+    $configYml = @"
 tunnel: $uuid
 credentials-file: $cfDir\$uuid.json
 
 ingress:
-  - hostname: mcp.wlmedia.com
-    service: http://localhost:8080
+  - hostname: $Hostname
+    service: $LocalService
   - service: http_status:404
 "@
-$configYml | Set-Content -Path "$cfDir\config.yml"
+    $configYml | Set-Content -Path "$cfDir\config.yml" -Encoding UTF8
+    Write-Host "✓ Configuration file created at $cfDir\config.yml" -ForegroundColor Green
+}
+catch {
+    Write-Error "Failed to create configuration file: $_"
+    exit 1
+}
 
-# 5. Set DNS
-& $cfExe tunnel route dns $tunnel mcp.wlmedia.com
+# Step 5: Set DNS record
+Write-Host "`nStep 5: Setting DNS record..." -ForegroundColor Yellow
+try {
+    & $cfExe tunnel route dns $tunnel $Hostname
+    if ($LASTEXITCODE -ne 0) {
+        throw "DNS setup failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "✓ DNS record created for $Hostname" -ForegroundColor Green
+}
+catch {
+    Write-Error "DNS setup failed: $_"
+    Write-Host "You may need to manually create the DNS record in Cloudflare dashboard" -ForegroundColor Yellow
+}
 
-# 6. Install and start as service
-& $cfExe service install
-Start-Service cloudflared
+# Step 6: Install and start Windows service
+Write-Host "`nStep 6: Installing Windows service..." -ForegroundColor Yellow
+
+# Check if running as administrator
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-Not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error "Administrator privileges required for service installation. Please run PowerShell as Administrator."
+    exit 1
+}
+
+try {
+    # Install the service
+    & $cfExe service install
+    if ($LASTEXITCODE -ne 0) {
+        throw "Service installation failed with exit code $LASTEXITCODE"
+    }
+    Write-Host "✓ cloudflared service installed" -ForegroundColor Green
+    
+    # Start the service
+    Start-Service cloudflared
+    Write-Host "✓ cloudflared service started" -ForegroundColor Green
+    
+    # Verify service status
+    $service = Get-Service cloudflared -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        Write-Host "✓ Service is running successfully" -ForegroundColor Green
+    } else {
+        Write-Warning "Service may not be running properly. Check Event Viewer for details."
+    }
+}
+catch {
+    Write-Error "Service installation/startup failed: $_"
+    Write-Host "You may need to install and start the service manually" -ForegroundColor Yellow
+}
+
+Write-Host "`n=== Setup Complete ===" -ForegroundColor Cyan
+Write-Host "Your tunnel should now be accessible at: https://$Hostname" -ForegroundColor Green
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Yellow
+Write-Host "1. If you see UUID placeholder warnings above, update the `$uuid variable in this script" -ForegroundColor White
+Write-Host "2. Verify your local service is running on $LocalService" -ForegroundColor White
+Write-Host "3. Test the tunnel by visiting https://$Hostname" -ForegroundColor White
+Write-Host ""
+Write-Host "To manage the service:" -ForegroundColor Yellow
+Write-Host "  Start:   Start-Service cloudflared" -ForegroundColor White
+Write-Host "  Stop:    Stop-Service cloudflared" -ForegroundColor White
+Write-Host "  Status:  Get-Service cloudflared" -ForegroundColor White
