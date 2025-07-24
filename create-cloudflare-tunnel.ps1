@@ -75,14 +75,14 @@ if (-Not (Test-Path $cfExe)) {
     try {
         $downloadUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
         Invoke-WebRequest -Uri $downloadUrl -OutFile $cfExe -UseBasicParsing
-        Write-Host "✓ cloudflared.exe downloaded successfully" -ForegroundColor Green
+        Write-Host "[OK] cloudflared.exe downloaded successfully" -ForegroundColor Green
     }
     catch {
         Write-Error "Failed to download cloudflared.exe: $_"
         exit 1
     }
 } else {
-    Write-Host "✓ cloudflared.exe already exists" -ForegroundColor Green
+    Write-Host "[OK] cloudflared.exe already exists" -ForegroundColor Green
 }
 
 # Step 2: Authenticate with Cloudflare
@@ -93,7 +93,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Authentication failed with exit code $LASTEXITCODE"
     }
-    Write-Host "✓ Authentication completed" -ForegroundColor Green
+    Write-Host "[OK] Authentication completed" -ForegroundColor Green
 }
 catch {
     Write-Error "Authentication failed: $_"
@@ -111,17 +111,17 @@ try {
     
     # Parse the UUID from the output
     # Expected format: "Created tunnel [name] with id [uuid]"
-    $uuidMatch = $createOutput | Select-String "Created tunnel .+ with id ([a-f0-9-]+)"
+    $uuidMatch = $createOutput | Select-String "Created tunnel .+ with id \(([a-f0-9-]+)\)"
     if ($uuidMatch) {
         $uuid = $uuidMatch.Matches[0].Groups[1].Value
-        Write-Host "✓ Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
+        Write-Host "[OK] Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
     } else {
         # Fallback: try to find any UUID pattern in the output
         $uuidPattern = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"
         $uuidMatch = $createOutput | Select-String $uuidPattern
         if ($uuidMatch) {
             $uuid = $uuidMatch.Matches[0].Value
-            Write-Host "✓ Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
+            Write-Host "[OK] Tunnel '$tunnel' created successfully with UUID: $uuid" -ForegroundColor Green
         } else {
             Write-Warning "Could not automatically extract tunnel UUID from output. Please check the tunnel creation manually."
             Write-Host "Command output: $createOutput" -ForegroundColor Gray
@@ -159,7 +159,7 @@ ingress:
   - service: http_status:404
 "@
     $configYml | Set-Content -Path "$cfDir\config.yml" -Encoding UTF8
-    Write-Host "✓ Configuration file created at $cfDir\config.yml" -ForegroundColor Green
+    Write-Host "[OK] Configuration file created at $cfDir\config.yml" -ForegroundColor Green
 }
 catch {
     Write-Error "Failed to create configuration file: $_"
@@ -173,7 +173,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "DNS setup failed with exit code $LASTEXITCODE"
     }
-    Write-Host "✓ DNS record created for $Hostname" -ForegroundColor Green
+    Write-Host "[OK] DNS record created for $Hostname" -ForegroundColor Green
 }
 catch {
     Write-Error "DNS setup failed: $_"
@@ -196,16 +196,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Service installation failed with exit code $LASTEXITCODE"
     }
-    Write-Host "✓ cloudflared service installed" -ForegroundColor Green
+    Write-Host "[OK] cloudflared service installed" -ForegroundColor Green
     
     # Start the service
     Start-Service cloudflared
-    Write-Host "✓ cloudflared service started" -ForegroundColor Green
+    Write-Host "[OK] cloudflared service started" -ForegroundColor Green
     
     # Verify service status
     $service = Get-Service cloudflared -ErrorAction SilentlyContinue
     if ($service -and $service.Status -eq "Running") {
-        Write-Host "✓ Service is running successfully" -ForegroundColor Green
+        Write-Host "[OK] Service is running successfully" -ForegroundColor Green
     } else {
         Write-Warning "Service may not be running properly. Check Event Viewer for details."
     }

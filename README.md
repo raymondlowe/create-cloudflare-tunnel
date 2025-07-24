@@ -82,14 +82,23 @@ ingress:
 6. **Installs service** - Sets up cloudflared as a Windows service
 7. **Starts service** - Begins routing traffic through the tunnel
 
-## After Running the Script
+## Testing the Tunnel
 
-1. **Update the UUID** - After tunnel creation, copy the generated UUID and update the `$uuid` variable in the script
-2. **Verify the service** - Check that the cloudflared service is running:
+A simple test server is included to help verify your tunnel setup:
+
+1. Start the test server:
    ```powershell
-   Get-Service cloudflared
+   python test-server.py
    ```
-3. **Test connectivity** - Visit your configured hostname to verify the tunnel is working
+   This will start a web server on `localhost:8080` that responds with a Hello World page.
+
+2. Visit your public tunnel URL (e.g. `https://mcp.wlmedia.com`) in your browser. You should see the Hello World page from the test server.
+
+3. Stop the test server with `Ctrl+C` when done.
+
+## Test Summary
+
+See [CLOUDFLARE_TUNNEL_TEST_SUMMARY.md](CLOUDFLARE_TUNNEL_TEST_SUMMARY.md) for a detailed log of a successful end-to-end test.
 
 ## Troubleshooting
 
@@ -99,6 +108,11 @@ ingress:
 - **Download Fails**: Check your internet connection and firewall settings
 - **Authentication Issues**: Ensure you have a valid Cloudflare account and the domain is added to your account
 - **Service Won't Start**: Check the config.yml file for syntax errors
+
+### Config Formatting
+
+- If the tunnel service does not connect, check your `.cloudflared/config.yml` for line wrapping or formatting issues. The file should not have extra line breaks in the tunnel UUID or credentials-file path.
+- If you see errors about the service not stopping, you may need to kill the `cloudflared` process manually using Task Manager or `Stop-Process` in PowerShell.
 
 ### Log Files
 
