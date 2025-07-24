@@ -30,47 +30,38 @@ This script automates the entire process of setting up a Cloudflare tunnel, from
    # Clone the repository or download create-cloudflare-tunnel.ps1
    ```
 
-2. **Edit configuration variables:**
-   Open `create-cloudflare-tunnel.ps1` and modify these variables at the top:
+2. **Run the script with your desired settings:**
+   Open an Administrator PowerShell window and run:
    ```powershell
-   $tunnel   = "mytunnel"              # Change to your desired tunnel name
-   $uuid     = "<TUNNEL-UUID>"         # Will be updated after tunnel creation
+   .\create-cloudflare-tunnel.ps1 -TunnelName "mytunnel" -Hostname "your.domain.com" -LocalService "http://localhost:8080"
+   ```
+   - `-TunnelName` sets the name for your tunnel (default: `mytunnel`)
+   - `-Hostname` sets the public hostname (default: `mcp.wlmedia.com`)
+   - `-LocalService` sets the local service URL to expose (default: `http://localhost:8080`)
+
+   Example:
+   ```powershell
+   .\create-cloudflare-tunnel.ps1 -TunnelName "webserver" -Hostname "app.example.com" -LocalService "http://localhost:3000"
    ```
 
-3. **Update the hostname in the config section:**
-   ```powershell
-   # In the ingress section, change:
-   - hostname: mcp.wlmedia.com         # Change to your domain
-     service: http://localhost:8080    # Change to your local service
-   ```
+3. **Follow the prompts:**
+   The script will:
+   - Download cloudflared if needed
+   - Authenticate with Cloudflare
+   - Create the tunnel
+   - Generate the config file
+   - Set up the DNS record
+   - Install and start the Windows service
 
-4. **Run as Administrator:**
-   ```powershell
-   # Right-click PowerShell and "Run as Administrator"
-   .\create-cloudflare-tunnel.ps1
-   ```
+4. **Test the tunnel:**
+   See the [Testing the Tunnel](#testing-the-tunnel) section below.
 
 ## Configuration
 
-### Main Variables
+All configuration is handled via command-line parameters. You do **not** need to edit variables in the script.
 
-| Variable | Description | Default Value |
-|----------|-------------|---------------|
-| `$cfExe` | Path to cloudflared executable | `$env:ProgramFiles\cloudflared\cloudflared.exe` |
-| `$cfDir` | Cloudflare configuration directory | `$env:USERPROFILE\.cloudflared` |
-| `$tunnel` | Name of the tunnel to create | `mytunnel` |
-| `$uuid` | Tunnel UUID (auto-generated) | `<TUNNEL-UUID>` |
-
-### Ingress Rules
-
-The script creates a configuration with ingress rules that define how traffic is routed:
-
-```yaml
-ingress:
-  - hostname: your-domain.com    # Your public hostname
-    service: http://localhost:8080  # Your local service
-  - service: http_status:404     # Catch-all rule (required)
-```
+- To change the tunnel name, hostname, or local service, simply pass the appropriate arguments when running the script.
+- The script will generate the correct config file and manage all required settings automatically.
 
 ## What the Script Does
 
